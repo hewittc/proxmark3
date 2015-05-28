@@ -45,9 +45,6 @@ ARMSRC = fpgaloader.c \
 	BigBuf.c \
 	optimized_cipher.c
 
-# stdint.h provided locally until GCC 4.5 becomes C99 compliant
-#APP_CFLAGS += -I.
-
 # Do not move this inclusion before the definition of {THUMB,ASM,ARM}SRC
 include ../common/Makefile.common
 
