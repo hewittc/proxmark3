@@ -17,6 +17,7 @@ module fpga_lf(
 	input [7:0] adc_d, output adc_clk, output adc_noe,
 	output ssp_frame, output ssp_din, input ssp_dout, output ssp_clk,
 	input cross_hi, input cross_lo,
+	output mux_lo, output mux_hi,
 	output dbg
 );
 
@@ -119,5 +120,9 @@ mux8 mux_dbg			(major_mode, dbg,       lr_dbg,       le_dbg,       lp_dbg,      
 
 // In all modes, let the ADC's outputs be enabled.
 assign adc_noe = 1'b0;
+
+// Mux for proxmark3lcd
+assign mux_hi = (!major_mode[2] && major_mode[1]) || (major_mode[2] && !major_mode[1]);
+assign mux_lo = ~mux_hi;
 
 endmodule

@@ -15,11 +15,11 @@ fpga_lf.ngc: fpga_lf.v fpga.ucf xst_lf.scr util.v clk_divider.v lo_edge_detect.v
 
 %.ngd: %.ngc
 	$(DELETE) $@
-	$(XILINX_TOOLS_PREFIX)ngdbuild -aul -p xc2s30-5-vq100 -nt timestamp -uc fpga.ucf $< $@
+	$(XILINX_TOOLS_PREFIX)ngdbuild -aul -p xc3s250e-4vq100 -nt timestamp -uc fpga.ucf $< $@
 
 %.ncd: %.ngd
 	$(DELETE) $@
-	$(XILINX_TOOLS_PREFIX)map -p xc2s30-5-vq100 $<
+	$(XILINX_TOOLS_PREFIX)map -p xc3s250e-4vq100 $<
 
 %-placed.ncd: %.ncd
 	$(DELETE) $@
