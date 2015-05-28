@@ -60,6 +60,8 @@
 
 #define SPI_FPGA_MODE	0
 #define SPI_LCD_MODE	1
+#define SPI_MSD_MODE	2
+#define SPI_SPARE_MODE	3
 
 #define FPGA_BITSTREAM_ERR 0
 #define FPGA_BITSTREAM_LF 1
@@ -70,21 +72,28 @@
 
 //#define PACKED __attribute__((__packed__))
 
-#define LED_A_ON()		HIGH(GPIO_LED_A)
+#define LCD_CS_ON()		HIGH(GPIO_LCD_CS)
+#define LCD_CS_OFF()		LOW(GPIO_LCD_CS)
+
+#define LED_A_ON()		LOW(GPIO_LED_A)
 #define LED_A_OFF()		LOW(GPIO_LED_A)
-#define LED_A_INV()		INVBIT(GPIO_LED_A)
-#define LED_B_ON()		HIGH(GPIO_LED_B)
+#define LED_A_INV()		LOW(GPIO_LED_A)
+#define LED_B_ON()		LOW(GPIO_LED_B)
 #define LED_B_OFF()		LOW(GPIO_LED_B)
-#define LED_B_INV()		INVBIT(GPIO_LED_B)
-#define LED_C_ON()		HIGH(GPIO_LED_C)
+#define LED_B_INV()		LOW(GPIO_LED_B)
+#define LED_C_ON()		LOW(GPIO_LED_C)
 #define LED_C_OFF()		LOW(GPIO_LED_C)
-#define LED_C_INV()		INVBIT(GPIO_LED_C)
-#define LED_D_ON()		HIGH(GPIO_LED_D)
+#define LED_C_INV()		LOW(GPIO_LED_C)
+#define LED_D_ON()		LOW(GPIO_LED_D)
 #define LED_D_OFF()		LOW(GPIO_LED_D)
-#define LED_D_INV()		INVBIT(GPIO_LED_D)
+#define LED_D_INV()		LOW(GPIO_LED_D)
 #define RELAY_ON()		HIGH(GPIO_RELAY)
 #define RELAY_OFF()		LOW(GPIO_RELAY)
 #define BUTTON_PRESS()	!(AT91C_BASE_PIOA->PIO_PDSR & GPIO_BUTTON)
+#define BUTTON_UP()	!(AT91C_BASE_PIOA->PIO_PDSR & GPIO_BUTTON_U)
+#define BUTTON_DOWN()   !(AT91C_BASE_PIOA->PIO_PDSR & GPIO_BUTTON_D)
+#define BUTTON_LEFT()	!(AT91C_BASE_PIOA->PIO_PDSR & GPIO_BUTTON_L)
+#define BUTTON_RIGHT()	!(AT91C_BASE_PIOA->PIO_PDSR & GPIO_BUTTON_R)
 
 #define VERSION_INFORMATION_MAGIC 0x56334d50
 struct version_information {
