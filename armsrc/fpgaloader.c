@@ -439,6 +439,7 @@ void FpgaWriteConfWord(uint8_t v)
 //-----------------------------------------------------------------------------
 void SetAdcMuxFor(uint32_t whichGpio)
 {
+	return; // not used by proxmark3lcd
 	AT91C_BASE_PIOA->PIO_OER =
 		GPIO_MUXSEL_HIPKD |
 		GPIO_MUXSEL_LOPKD |
