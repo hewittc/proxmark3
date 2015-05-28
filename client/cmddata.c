@@ -1919,6 +1919,7 @@ int CmdTuneSamples(const char *Cmd)
 {
 	int timeout = 0;
 	printf("\nMeasuring antenna characteristics, please wait...");
+	fflush(stdout);
 
 	UsbCommand c = {CMD_MEASURE_ANTENNA_TUNING};
 	SendCommand(&c);
@@ -1927,6 +1928,7 @@ int CmdTuneSamples(const char *Cmd)
 	while(!WaitForResponseTimeout(CMD_MEASURED_ANTENNA_TUNING,&resp,1000)) {
 		timeout++;
 		printf(".");
+		fflush(stdout);
 		if (timeout > 7) {
 			PrintAndLog("\nNo response from Proxmark. Aborting...");
 			return 1;
