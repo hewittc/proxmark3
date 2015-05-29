@@ -27,7 +27,7 @@ fpga_lf.ngc: fpga_lf.v fpga.ucf xst_lf.scr util.v clk_divider.v lo_edge_detect.v
 
 %.bit: %-placed.ncd
 	$(DELETE) $@ $*.drc $*.rbt
-	$(XILINX_TOOLS_PREFIX)bitgen $< $@
+	$(XILINX_TOOLS_PREFIX)bitgen -g compress $< $@
 
 .PHONY: all clean help
 help:
