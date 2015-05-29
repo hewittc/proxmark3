@@ -13,7 +13,7 @@ This project incorporates code from two sources:
 * [Null Space Labs](http://www.032.la/svn/listing.php?repname=032&path=%2FProxmark3_LCD%2Ftrunk%2Fsource%2F&#a5f33ddfcd9ad27f6841dd37aa0812211)
 
 Other resources: 
-* [Null Space Labs' build notes](http://wiki.032.la/nsl/Proxmark3_LCD)
+* [Null Space Labs' build notes](http://wiki.032.la/proxmark3_lcd)
 * [Original Proxmark3](http://cq.cx/proxmark3.pl)
 
 I had a lot of trouble with flashing the device initially but ended up having a lot of success using a [Bus Pirate](http://dangerousprototypes.com/docs/Bus_Pirate) and OpenOCD. An example configuration file is present in tools/. Once bootrom.elf and fullimage.elf are built, it is possible to use the following commands in the telnet interface to flash the device:
