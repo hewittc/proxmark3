@@ -526,13 +526,24 @@ int ParadoxdemodFSK(uint8_t *dest, size_t *size, uint32_t *hi2, uint32_t *hi, ui
 	return (int)startIdx;
 }
 
-uint32_t bytebits_to_byte(uint8_t* src, size_t numbits)
+uint32_t bytebits_to_byte(uint8_t *src, size_t numbits)
 {
 	uint32_t num = 0;
 	for(int i = 0 ; i < numbits ; i++)
 	{
 		num = (num << 1) | (*src);
 		src++;
+	}
+	return num;
+}
+
+//least significant bit first
+uint32_t bytebits_to_byteLSBF(uint8_t *src, size_t numbits)
+{
+	uint32_t num = 0;
+	for(int i = 0 ; i < numbits ; i++)
+	{
+		num = (num << 1) | *(src + (numbits-(i+1)));
 	}
 	return num;
 }
@@ -569,7 +580,7 @@ int IOdemodFSK(uint8_t *dest, size_t size)
 
 // by marshmellow
 // takes a array of binary values, start position, length of bits per parity (includes parity bit),
-//   Parity Type (1 for odd 0 for even), and binary Length (length to run) 
+//   Parity Type (1 for odd; 0 for even; 2 Always 1's), and binary Length (length to run) 
 size_t removeParity(uint8_t *BitStream, size_t startIdx, uint8_t pLen, uint8_t pType, size_t bLen)
 {
 	uint32_t parityWd = 0;
@@ -579,15 +590,34 @@ size_t removeParity(uint8_t *BitStream, size_t startIdx, uint8_t pLen, uint8_t p
 			parityWd = (parityWd << 1) | BitStream[startIdx+word+bit];
 			BitStream[j++] = (BitStream[startIdx+word+bit]);
 		}
-		j--;
+		j--; // overwrite parity with next data
 		// if parity fails then return 0
-		if (parityTest(parityWd, pLen, pType) == 0) return -1;
+		if (pType == 2) { // then marker bit which should be a 1
+			if (!BitStream[j]) return 0;
+		} else {
+			if (parityTest(parityWd, pLen, pType) == 0) return 0;			
+		}
 		bitCnt+=(pLen-1);
 		parityWd = 0;
 	}
 	// if we got here then all the parities passed
 	//return ID start index and size
 	return bitCnt;
+}
+
+// Ask/Biphase Demod then try to locate an ISO 11784/85 ID
+// BitStream must contain previously askrawdemod and biphasedemoded data
+int FDXBdemodBI(uint8_t *dest, size_t *size)
+{
+	//make sure buffer has enough data
+	if (*size < 128) return -1;
+
+	size_t startIdx = 0;
+	uint8_t preamble[] = {0,0,0,0,0,0,0,0,0,0,1};
+
+	uint8_t errChk = preambleSearch(dest, preamble, sizeof(preamble), size, &startIdx);
+	if (errChk == 0) return -2; //preamble not found
+	return (int)startIdx;
 }
 
 // by marshmellow

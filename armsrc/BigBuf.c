@@ -88,6 +88,16 @@ void BigBuf_free_keep_EM(void)
 	}
 }
 
+void BigBuf_print_status(void)
+{
+	Dbprintf("Memory");
+	Dbprintf("  BIGBUF_SIZE.............%d", BIGBUF_SIZE);
+	Dbprintf("  BigBuf_hi  .............%d", BigBuf_hi);
+	Dbprintf("Tracing");
+	Dbprintf("  tracing ................%d", tracing);
+	Dbprintf("  traceLen ...............%d", traceLen);
+}
+
 
 // return the maximum trace length (i.e. the unallocated size of BigBuf)
 uint16_t BigBuf_max_traceLen(void)
@@ -96,9 +106,6 @@ uint16_t BigBuf_max_traceLen(void)
 }
 
 void clear_trace() {
-	uint8_t *trace = BigBuf_get_addr();
-	uint16_t max_traceLen = BigBuf_max_traceLen();
-	memset(trace, 0x44, max_traceLen);
 	traceLen = 0;
 }
 
@@ -176,13 +183,10 @@ bool RAMFUNC LogTrace(const uint8_t *btBytes, uint16_t iLen, uint32_t timestamp_
 	}
 	traceLen += num_paritybytes;
 
-	if(traceLen +4 < max_traceLen)
-	{	//If it hadn't been cleared, for whatever reason..
-		memset(trace+traceLen,0x44, 4);
-	}
-
 	return TRUE;
 }
+
+
 int LogTraceHitag(const uint8_t * btBytes, int iBits, int iSamples, uint32_t dwParity, int readerToTag)
 {
 	/**

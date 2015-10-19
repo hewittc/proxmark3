@@ -22,6 +22,7 @@
 #include "util.h"
 #include "cmdlf.h"
 #include "cmdlfhid.h"
+#include "cmdlfawid.h"
 #include "cmdlfti.h"
 #include "cmdlfem4x.h"
 #include "cmdlfhitag.h"
@@ -388,7 +389,7 @@ int usage_lf_config()
 	PrintAndLog("       b <bps>       Sets resolution of bits per sample. Default (max): 8");
 	PrintAndLog("       d <decim>     Sets decimation. A value of N saves only 1 in N samples. Default: 1");
 	PrintAndLog("       a [0|1]       Averaging - if set, will average the stored sample value when decimating. Default: 1");
-	PrintAndLog("       t <threshold> Sets trigger threshold. 0 means no threshold");
+	PrintAndLog("       t <threshold> Sets trigger threshold. 0 means no threshold (range: 0-128)");
 	PrintAndLog("Examples:");
 	PrintAndLog("      lf config b 8 L");
 	PrintAndLog("                    Samples at 125KHz, 8bps.");
@@ -1072,6 +1073,12 @@ int CmdLFfind(const char *Cmd)
 		return 1;
 	}
 
+	ans=CmdFDXBdemodBI("");
+	if (ans>0) {
+		PrintAndLog("\nValid FDX-B ID Found!");
+		return 1;
+	}
+
 	ans=EM4x50Read("", false);
 	if (ans>0) {
 		PrintAndLog("\nValid EM4x50 ID Found!");
@@ -1124,13 +1131,14 @@ static command_t CommandTable[] =
 	{"config",      CmdLFSetConfig,     0, "Set config for LF sampling, bit/sample, decimation, frequency"},
 	{"flexdemod",   CmdFlexdemod,       1, "Demodulate samples for FlexPass"},
 	{"hid",         CmdLFHID,           1, "{ HID RFIDs... }"},
+	{"awid",		CmdLFAWID,		    1, "{ AWID RFIDs... }"},
 	{"io",       	  CmdLFIO,	          1, "{ ioProx tags... }"},
 	{"indalademod", CmdIndalaDemod,     1, "['224'] -- Demodulate samples for Indala 64 bit UID (option '224' for 224 bit)"},
 	{"indalaclone", CmdIndalaClone,     0, "<UID> ['l']-- Clone Indala to T55x7 (tag must be in antenna)(UID in HEX)(option 'l' for 224 UID"},
 	{"read",        CmdLFRead,          0, "['s' silent] Read 125/134 kHz LF ID-only tag. Do 'lf read h' for help"},
 	{"search",      CmdLFfind,          1, "[offline] ['u'] Read and Search for valid known tag (in offline mode it you can load first then search) - 'u' to search for unknown tags"},
 	{"sim",         CmdLFSim,           0, "[GAP] -- Simulate LF tag from buffer with optional GAP (in microseconds)"},
-	{"simask",      CmdLFaskSim,        0, "[clock] [invert <1|0>] [manchester/raw <'m'|'r'>] [msg separator 's'] [d <hexdata>] -- Simulate LF ASK tag from demodbuffer or input"},
+	{"simask",      CmdLFaskSim,        0, "[clock] [invert <1|0>] [biphase/manchester/raw <'b'|'m'|'r'>] [msg separator 's'] [d <hexdata>] -- Simulate LF ASK tag from demodbuffer or input"},
 	{"simfsk",      CmdLFfskSim,        0, "[c <clock>] [i] [H <fcHigh>] [L <fcLow>] [d <hexdata>] -- Simulate LF FSK tag from demodbuffer or input"},
 	{"simpsk",      CmdLFpskSim,        0, "[1|2|3] [c <clock>] [i] [r <carrier>] [d <raw hex to sim>] -- Simulate LF PSK tag from demodbuffer or input"},
 	{"simbidir",    CmdLFSimBidir,      0, "Simulate LF tag (with bidirectional data transmission between reader and tag)"},

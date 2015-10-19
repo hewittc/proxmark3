@@ -268,15 +268,15 @@ void FormatVersionInformation(char *dst, int len, const char *prefix, void *vers
 	dst[0] = 0;
 	strncat(dst, prefix, len-1);
 	if(v->magic != VERSION_INFORMATION_MAGIC) {
-		strncat(dst, "Missing/Invalid version information", len - strlen(dst) - 1);
+		strncat(dst, "Missing/Invalid version information\n", len - strlen(dst) - 1);
 		return;
 	}
 	if(v->versionversion != 1) {
-		strncat(dst, "Version information not understood", len - strlen(dst) - 1);
+		strncat(dst, "Version information not understood\n", len - strlen(dst) - 1);
 		return;
 	}
 	if(!v->present) {
-		strncat(dst, "Version information not available", len - strlen(dst) - 1);
+		strncat(dst, "Version information not available\n", len - strlen(dst) - 1);
 		return;
 	}
 
@@ -289,6 +289,7 @@ void FormatVersionInformation(char *dst, int len, const char *prefix, void *vers
 
 	strncat(dst, " ", len - strlen(dst) - 1);
 	strncat(dst, v->buildtime, len - strlen(dst) - 1);
+	strncat(dst, "\n", len - strlen(dst) - 1);
 }
 
 //  -------------------------------------------------------------------------
@@ -303,11 +304,12 @@ void FormatVersionInformation(char *dst, int len, const char *prefix, void *vers
 
 void StartTickCount()
 {
-//  must be 0x40, but on my cpu - included divider is optimal
-//  0x20 - 1 ms / bit 
-//  0x40 - 2 ms / bit
-
-	AT91C_BASE_RTTC->RTTC_RTMR = AT91C_RTTC_RTTRST + 0x001D; // was 0x003B
+	// This timer is based on the slow clock. The slow clock frequency is between 22kHz and 40kHz.
+	// We can determine the actual slow clock frequency by looking at the Main Clock Frequency Register.
+    uint16_t mainf = AT91C_BASE_PMC->PMC_MCFR & 0xffff;		// = 16 * main clock frequency (16MHz) / slow clock frequency
+	// set RealTimeCounter divider to count at 1kHz:
+	AT91C_BASE_RTTC->RTTC_RTMR = AT91C_RTTC_RTTRST | ((256000 + (mainf/2)) / mainf);
+	// note: worst case precision is approx 2.5%
 }
 
 /*

@@ -16,8 +16,7 @@
 #include "string.h"
 #include "lfdemod.h"
 #include "lfsampling.h"
-#include "usb_cdc.h"
-
+#include "usb_cdc.h" //test
 
 /**
  * Function to do a modulation and then get samples.
@@ -214,6 +213,8 @@ void ReadTItag(void)
 	}
 }
 
+
+
 void WriteTIbyte(uint8_t b)
 {
 	int i = 0;
@@ -310,11 +311,16 @@ void AcquireTiType(void)
 	}
 }
 
+
+
+
 // arguments: 64bit data split into 32bit idhi:idlo and optional 16bit crc
 // if crc provided, it will be written with the data verbatim (even if bogus)
 // if not provided a valid crc will be computed from the data and written.
 void WriteTItag(uint32_t idhi, uint32_t idlo, uint16_t crc)
 {
+
+
 	FpgaDownloadAndGo(FPGA_BITSTREAM_LF);
 	if(crc == 0) {
 		crc = update_crc16(crc, (idlo)&0xff);
@@ -402,7 +408,7 @@ void SimulateTagLowFrequency(int period, int gap, int ledcontrol)
 	for(;;) {
 		//wait until SSC_CLK goes HIGH
 		while(!(AT91C_BASE_PIOA->PIO_PDSR & GPIO_SSC_CLK)) {
-			if(BUTTON_PRESS() || usb_poll()) {
+			if(BUTTON_PRESS() || (usb_poll_validate_length() )) {
 				DbpString("Stopped");
 				return;
 			}
@@ -841,6 +847,96 @@ void CmdHIDdemodFSK(int findone, int *high, int *low, int ledcontrol)
 	if (ledcontrol) LED_A_OFF();
 }
 
+// loop to get raw HID waveform then FSK demodulate the TAG ID from it
+void CmdAWIDdemodFSK(int findone, int *high, int *low, int ledcontrol)
+{
+	uint8_t *dest = BigBuf_get_addr();
+	//const size_t sizeOfBigBuff = BigBuf_max_traceLen();
+	size_t size; 
+	int idx=0;
+	// Configure to go in 125Khz listen mode
+	LFSetupFPGAForADC(95, true);
+
+	while(!BUTTON_PRESS()) {
+
+		WDT_HIT();
+		if (ledcontrol) LED_A_ON();
+
+		DoAcquisition_default(-1,true);
+		// FSK demodulator
+		//size = sizeOfBigBuff;  //variable size will change after demod so re initialize it before use
+		size = 50*128*2; //big enough to catch 2 sequences of largest format
+		idx = AWIDdemodFSK(dest, &size);
+		
+		if (idx>0 && size==96){
+	        // Index map
+	        // 0            10            20            30              40            50              60
+	        // |            |             |             |               |             |               |
+	        // 01234567 890 1 234 5 678 9 012 3 456 7 890 1 234 5 678 9 012 3 456 7 890 1 234 5 678 9 012 3 - to 96
+	        // -----------------------------------------------------------------------------
+	        // 00000001 000 1 110 1 101 1 011 1 101 1 010 0 000 1 000 1 010 0 001 0 110 1 100 0 000 1 000 1
+	        // premable bbb o bbb o bbw o fff o fff o ffc o ccc o ccc o ccc o ccc o ccc o wxx o xxx o xxx o - to 96
+	        //          |---26 bit---|    |-----117----||-------------142-------------|
+	        // b = format bit len, o = odd parity of last 3 bits
+	        // f = facility code, c = card number
+	        // w = wiegand parity
+	        // (26 bit format shown)
+
+	        //get raw ID before removing parities
+	        uint32_t rawLo = bytebits_to_byte(dest+idx+64,32);
+	        uint32_t rawHi = bytebits_to_byte(dest+idx+32,32);
+	        uint32_t rawHi2 = bytebits_to_byte(dest+idx,32);
+
+	        size = removeParity(dest, idx+8, 4, 1, 88);
+	        // ok valid card found!
+
+	        // Index map
+	        // 0           10         20        30          40        50        60
+	        // |           |          |         |           |         |         |
+	        // 01234567 8 90123456 7890123456789012 3 456789012345678901234567890123456
+	        // -----------------------------------------------------------------------------
+	        // 00011010 1 01110101 0000000010001110 1 000000000000000000000000000000000
+	        // bbbbbbbb w ffffffff cccccccccccccccc w xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+	        // |26 bit|   |-117--| |-----142------|
+	        // b = format bit len, o = odd parity of last 3 bits
+	        // f = facility code, c = card number
+	        // w = wiegand parity
+	        // (26 bit format shown)
+
+	        uint32_t fc = 0;
+	        uint32_t cardnum = 0;
+	        uint32_t code1 = 0;
+	        uint32_t code2 = 0;
+	        uint8_t fmtLen = bytebits_to_byte(dest,8);
+	        if (fmtLen==26){
+	                fc = bytebits_to_byte(dest+9, 8);
+	                cardnum = bytebits_to_byte(dest+17, 16);
+	                code1 = bytebits_to_byte(dest+8,fmtLen);
+	                Dbprintf("AWID Found - BitLength: %d, FC: %d, Card: %d - Wiegand: %x, Raw: %08x%08x%08x", fmtLen, fc, cardnum, code1, rawHi2, rawHi, rawLo);
+	        } else {
+	                cardnum = bytebits_to_byte(dest+8+(fmtLen-17), 16);
+	                if (fmtLen>32){
+                        code1 = bytebits_to_byte(dest+8,fmtLen-32);
+                        code2 = bytebits_to_byte(dest+8+(fmtLen-32),32);
+                        Dbprintf("AWID Found - BitLength: %d -unknown BitLength- (%d) - Wiegand: %x%08x, Raw: %08x%08x%08x", fmtLen, cardnum, code1, code2, rawHi2, rawHi, rawLo);
+                } else{
+                        code1 = bytebits_to_byte(dest+8,fmtLen);
+                        Dbprintf("AWID Found - BitLength: %d -unknown BitLength- (%d) - Wiegand: %x, Raw: %08x%08x%08x", fmtLen, cardnum, code1, rawHi2, rawHi, rawLo);
+                }
+			}
+			if (findone){
+				if (ledcontrol)	LED_A_OFF();
+				return;
+			}
+			// reset
+		}
+		idx = 0;
+		WDT_HIT();
+	}
+	DbpString("Stopped");
+	if (ledcontrol) LED_A_OFF();
+}
+
 void CmdEM410xdemod(int findone, int *high, int *low, int ledcontrol)
 {
 	uint8_t *dest = BigBuf_get_addr();
@@ -1024,10 +1120,10 @@ void CmdIOdemodFSK(int findone, int *high, int *low, int ledcontrol)
  * To compensate antenna falling times shorten the write times
  * and enlarge the gap ones.
  */
-#define START_GAP 50*8 // 10 - 50fc 250
-#define WRITE_GAP 20*8 //    - 30fc 160
-#define WRITE_0   24*8 // 16 - 63fc 54fc 144
-#define WRITE_1   54*8 // 48 - 63fc 54fc 432 for T55x7; 448 for E5550 //400
+#define START_GAP 31*8 // was 250 // SPEC:  1*8 to 50*8 - typ 15*8 (or 15fc)
+#define WRITE_GAP 20*8 // was 160 // SPEC:  1*8 to 20*8 - typ 10*8 (or 10fc)
+#define WRITE_0   18*8 // was 144 // SPEC: 16*8 to 32*8 - typ 24*8 (or 24fc)
+#define WRITE_1   50*8 // was 400 // SPEC: 48*8 to 64*8 - typ 56*8 (or 56fc)  432 for T55x7; 448 for E5550
 
 #define T55xx_SAMPLES_SIZE      12000 // 32 x 32 x 10  (32 bit times numofblock (7), times clock skip..)
 
@@ -1615,6 +1711,8 @@ int DemodPCF7931(uint8_t **outBlocks) {
 		if(num_blocks == 4) break;
 	}
 	memcpy(outBlocks, Blocks, 16*num_blocks);
+	FpgaWriteConfWord(FPGA_MAJOR_MODE_OFF);
+
 	return num_blocks;
 }
 
@@ -1738,14 +1836,15 @@ void ReadPCF7931() {
 	Dbprintf("Memory content:");
 	Dbprintf("-----------------------------------------");
 	for(i=0; i<max_blocks; i++) {
-		if(Blocks[i][ALLOC]==1)
+		if(Blocks[i][ALLOC]==1){
 			Dbprintf("%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
 					 Blocks[i][0], Blocks[i][1], Blocks[i][2], Blocks[i][3], Blocks[i][4], Blocks[i][5], Blocks[i][6], Blocks[i][7],
 					Blocks[i][8], Blocks[i][9], Blocks[i][10], Blocks[i][11], Blocks[i][12], Blocks[i][13], Blocks[i][14], Blocks[i][15]);
-		else
+		}else
 			Dbprintf("<missing block %d>", i);
 	}
 	Dbprintf("-----------------------------------------");
+	
 
 	return ;
 }
@@ -1967,4 +2066,262 @@ void EM4xWriteWord(uint32_t Data, uint8_t Address, uint32_t Pwd, uint8_t PwdMode
 	SpinDelay(20);
 	FpgaWriteConfWord(FPGA_MAJOR_MODE_OFF); // field off
 	LED_D_OFF();
+}
+
+
+#define T0_PCF 8 //period for the pcf7931 in us
+
+/* Write on a byte of a PCF7931 tag
+ * @param address : address of the block to write
+   @param byte : address of the byte to write
+    @param data : data to write
+ */
+void WritePCF7931(uint8_t pass1, uint8_t pass2, uint8_t pass3, uint8_t pass4, uint8_t pass5, uint8_t pass6, uint8_t pass7, uint16_t init_delay, int32_t l, int32_t p, uint8_t address, uint8_t byte, uint8_t data)
+{
+
+	uint32_t tab[1024]={0}; // data times frame
+	uint32_t u = 0;
+	uint8_t parity = 0;
+	bool comp = 0;
+
+
+	//BUILD OF THE DATA FRAME
+
+	//alimentation of the tag (time for initializing)
+	AddPatternPCF7931(init_delay, 0, 8192/2*T0_PCF, tab);
+
+	//PMC
+	Dbprintf("Initialization delay : %d us", init_delay);
+	AddPatternPCF7931(8192/2*T0_PCF + 319*T0_PCF+70, 3*T0_PCF, 29*T0_PCF, tab);
+
+	Dbprintf("Offsets : %d us on the low pulses width, %d us on the low pulses positions", l, p);
+
+	//password indication bit
+	AddBitPCF7931(1, tab, l, p);
+
+
+	//password (on 56 bits)
+	Dbprintf("Password (LSB first on each byte) : %02x %02x %02x %02x %02x %02x %02x", pass1,pass2,pass3,pass4,pass5,pass6,pass7);
+	AddBytePCF7931(pass1, tab, l, p);
+	AddBytePCF7931(pass2, tab, l, p);
+	AddBytePCF7931(pass3, tab, l, p);
+	AddBytePCF7931(pass4, tab, l, p);
+	AddBytePCF7931(pass5, tab, l, p);
+	AddBytePCF7931(pass6, tab, l, p);
+	AddBytePCF7931(pass7, tab, l, p);
+
+
+	//programming mode (0 or 1)
+	AddBitPCF7931(0, tab, l, p);
+
+	//block adress on 6 bits
+	Dbprintf("Block address : %02x", address);
+	for (u=0; u<6; u++)
+	{
+		if (address&(1<<u)) {	// bit 1
+			 parity++;
+			 AddBitPCF7931(1, tab, l, p);
+		} else{					// bit 0
+			 AddBitPCF7931(0, tab, l, p);
+		}
+	}
+
+	//byte address on 4 bits
+	Dbprintf("Byte address : %02x", byte);
+	for (u=0; u<4; u++)
+	{
+		if (byte&(1<<u)) {	// bit 1
+			 parity++;
+			 AddBitPCF7931(1, tab, l, p);
+		} else{				// bit 0
+			 AddBitPCF7931(0, tab, l, p);
+		}
+	}
+
+	//data on 8 bits
+	Dbprintf("Data : %02x", data);
+	for (u=0; u<8; u++)
+	{
+		if (data&(1<<u)) {	// bit 1
+			 parity++;
+			 AddBitPCF7931(1, tab, l, p);
+		} else{				//bit 0
+			 AddBitPCF7931(0, tab, l, p);
+		}
+	}
+
+
+	//parity bit
+	if((parity%2)==0){
+	 	AddBitPCF7931(0, tab, l, p); //even parity
+	}else{
+		AddBitPCF7931(1, tab, l, p);//odd parity
+	}
+
+	//time access memory
+	AddPatternPCF7931(5120+2680, 0, 0, tab);
+
+	//conversion of the scale time
+	for(u=0;u<500;u++){
+		tab[u]=(tab[u] * 3)/2;
+	}
+
+
+	//compennsation of the counter reload
+	while (!comp){
+		comp = 1;
+		for(u=0;tab[u]!=0;u++){
+			if(tab[u] > 0xFFFF){
+			  tab[u] -= 0xFFFF;
+			  comp = 0;
+			}
+		}
+	}
+
+	SendCmdPCF7931(tab);
+}
+
+
+
+/* Send a trame to a PCF7931 tags
+ * @param tab : array of the data frame
+ */
+
+void SendCmdPCF7931(uint32_t * tab){
+	uint16_t u=0;
+	uint16_t tempo=0;
+
+	Dbprintf("SENDING DATA FRAME...");
+
+	FpgaDownloadAndGo(FPGA_BITSTREAM_LF);
+
+	FpgaSendCommand(FPGA_CMD_SET_DIVISOR, 95); //125Khz
+
+	FpgaWriteConfWord(FPGA_MAJOR_MODE_LF_PASSTHRU );
+
+	LED_A_ON();
+
+	// steal this pin from the SSP and use it to control the modulation
+	AT91C_BASE_PIOA->PIO_PER = GPIO_SSC_DOUT;
+	AT91C_BASE_PIOA->PIO_OER = GPIO_SSC_DOUT;
+
+	//initialization of the timer
+	AT91C_BASE_PMC->PMC_PCER |= (0x1 << 12) | (0x1 << 13) | (0x1 << 14);
+	AT91C_BASE_TCB->TCB_BMR = AT91C_TCB_TC0XC0S_NONE | AT91C_TCB_TC1XC1S_TIOA0 | AT91C_TCB_TC2XC2S_NONE;
+	AT91C_BASE_TC0->TC_CCR = AT91C_TC_CLKDIS; // timer disable
+	AT91C_BASE_TC0->TC_CMR = AT91C_TC_CLKS_TIMER_DIV3_CLOCK;  //clock at 48/32 MHz
+	AT91C_BASE_TC0->TC_CCR = AT91C_TC_CLKEN;
+	AT91C_BASE_TCB->TCB_BCR = 1;
+
+
+	tempo = AT91C_BASE_TC0->TC_CV;
+	for(u=0;tab[u]!= 0;u+=3){
+
+
+		// modulate antenna
+		HIGH(GPIO_SSC_DOUT);
+		while(tempo !=  tab[u]){
+			tempo = AT91C_BASE_TC0->TC_CV;
+		}
+
+		// stop modulating antenna
+		LOW(GPIO_SSC_DOUT);
+		while(tempo !=  tab[u+1]){
+			tempo = AT91C_BASE_TC0->TC_CV;
+		}
+
+
+		// modulate antenna
+		HIGH(GPIO_SSC_DOUT);
+		while(tempo !=  tab[u+2]){
+			tempo = AT91C_BASE_TC0->TC_CV;
+		}
+
+
+	}
+
+	LED_A_OFF();
+	FpgaWriteConfWord(FPGA_MAJOR_MODE_OFF);
+	SpinDelay(200);
+
+
+	AT91C_BASE_TC0->TC_CCR = AT91C_TC_CLKDIS; // timer disable
+	DbpString("FINISH !");
+	DbpString("(Could be usefull to send the same trame many times)");
+	LED(0xFFFF, 1000);
+}
+
+
+/* Add a byte for building the data frame of PCF7931 tags 
+ * @param b : byte to add
+ * @param tab : array of the data frame
+ * @param l : offset on low pulse width
+ * @param p : offset on low pulse positioning
+ */
+
+bool AddBytePCF7931(uint8_t byte, uint32_t * tab, int32_t l, int32_t p){
+
+	uint32_t u;
+	for (u=0; u<8; u++)
+	{
+		if (byte&(1<<u)) {	//bit à 1
+			if(AddBitPCF7931(1, tab, l, p)==1)return 1;
+		} else { //bit à 0
+			if(AddBitPCF7931(0, tab, l, p)==1)return 1;
+		}
+	}
+
+	return 0;
+}
+
+/* Add a bits for building the data frame of PCF7931 tags 
+ * @param b : bit to add
+ * @param tab : array of the data frame
+ * @param l : offset on low pulse width
+ * @param p : offset on low pulse positioning
+ */
+bool AddBitPCF7931(bool b, uint32_t * tab, int32_t l, int32_t p){
+	uint8_t u = 0;
+
+	for(u=0;tab[u]!=0;u+=3){} //we put the cursor at the last value of the array
+	
+
+	if(b==1){	//add a bit 1
+		if(u==0) tab[u] = 34*T0_PCF+p;
+		else 	 tab[u] = 34*T0_PCF+tab[u-1]+p;
+
+		tab[u+1] = 6*T0_PCF+tab[u]+l;
+		tab[u+2] = 88*T0_PCF+tab[u+1]-l-p;
+		return 0;
+	}else{ 		//add a bit 0
+
+		if(u==0) tab[u] = 98*T0_PCF+p;
+		else  	 tab[u] = 98*T0_PCF+tab[u-1]+p;
+
+		tab[u+1] = 6*T0_PCF+tab[u]+l;
+		tab[u+2] = 24*T0_PCF+tab[u+1]-l-p;
+		return 0;
+	}
+
+	
+	return 1;
+}
+
+/* Add a custom pattern in the data frame
+ * @param a : delay of the first high pulse
+ * @param b : delay of the low pulse
+ * @param c : delay of the last high pulse
+ * @param tab : array of the data frame
+ */
+bool AddPatternPCF7931(uint32_t a, uint32_t b, uint32_t c, uint32_t * tab){
+	uint32_t u = 0;
+	for(u=0;tab[u]!=0;u+=3){} //we put the cursor at the last value of the array
+
+	if(u==0) tab[u] = a;
+	else tab[u] = a + tab[u-1];
+
+	tab[u+1] = b+tab[u];
+	tab[u+2] = c+tab[u+1];
+
+	return 0;
 }

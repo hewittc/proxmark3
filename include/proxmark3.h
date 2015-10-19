@@ -63,10 +63,6 @@
 #define SPI_MSD_MODE	2
 #define SPI_SPARE_MODE	3
 
-#define FPGA_BITSTREAM_ERR 0
-#define FPGA_BITSTREAM_LF 1
-#define FPGA_BITSTREAM_HF 2
-
 #define TRUE 1
 #define FALSE 0
 
