@@ -25,12 +25,14 @@
 #include "cmdmain.h"
 #include "util.h"
 #include "cmdscript.h"
+#include "cmdcrc.h"
 
 
 unsigned int current_command = CMD_UNKNOWN;
 
 static int CmdHelp(const char *Cmd);
 static int CmdQuit(const char *Cmd);
+static int CmdRev(const char *Cmd);
 
 //For storing command that are received from the device
 #define CMD_BUFFER_SIZE 50
@@ -44,10 +46,11 @@ static command_t CommandTable[] =
 {
   {"help",  CmdHelp,  1, "This help. Use '<command> help' for details of a particular command."},
   {"data",  CmdData,  1, "{ Plot window / data buffer manipulation... }"},
-  {"hf",    	CmdHF,    	1, "{ High Frequency commands... }"},
+  {"hf",    CmdHF,    1, "{ High Frequency commands... }"},
   {"hw",    CmdHW,    1, "{ Hardware commands... }"},
-  {"lf",    	CmdLF,    	1, "{ Low Frequency commands... }"},
-  {"script", CmdScript,   1,"{ Scripting commands }"},
+  {"lf",    CmdLF,    1, "{ Low Frequency commands... }"},
+  {"reveng",CmdRev,   1, "Crc calculations from the software reveng1-30"},
+  {"script",CmdScript,1, "{ Scripting commands }"},
   {"quit",  CmdQuit,  1, "Exit program"},
   {"exit",  CmdQuit,  1, "Exit program"},
   {NULL, NULL, 0, NULL}
@@ -65,9 +68,15 @@ int CmdHelp(const char *Cmd)
 
 int CmdQuit(const char *Cmd)
 {
-  exit(0);
+  return 99;
+}
+
+int CmdRev(const char *Cmd)
+{
+  CmdCrc(Cmd);
   return 0;
 }
+
 /**
  * @brief This method should be called when sending a new command to the pm3. In case any old
  *  responses from previous commands are stored in the buffer, a call to this method should clear them.
@@ -164,8 +173,8 @@ bool WaitForResponse(uint32_t cmd, UsbCommand* response) {
 // Entry point into our code: called whenever the user types a command and
 // then presses Enter, which the full command line that they typed.
 //-----------------------------------------------------------------------------
-void CommandReceived(char *Cmd) {
-  CmdsParse(CommandTable, Cmd);
+int CommandReceived(char *Cmd) {
+	return CmdsParse(CommandTable, Cmd);
 }
 
 
@@ -178,10 +187,11 @@ void UsbCommandReceived(UsbCommand *UC)
 	switch(UC->cmd) {
 		// First check if we are handling a debug message
 		case CMD_DEBUG_PRINT_STRING: {
-			char s[USB_CMD_DATA_SIZE+1] = {0x00};
+			char s[USB_CMD_DATA_SIZE+1];
+			memset(s, 0x00, sizeof(s));
 			size_t len = MIN(UC->arg[0],USB_CMD_DATA_SIZE);
 			memcpy(s,UC->d.asBytes,len);
-			PrintAndLog("#db# %s       ", s);
+			PrintAndLog("#db# %s", s);
 			return;
 		} break;
 
