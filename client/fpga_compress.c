@@ -37,8 +37,8 @@
 #define COMPRESS_MAX_NICE_LENGTH       258
 #define COMPRESS_MAX_CHAIN            8192
 
-#define FPGA_INTERLEAVE_SIZE           288  // (the FPGA's internal config frame size is 288 bits. Interleaving with 288 bytes should give best compression)
-#define FPGA_CONFIG_SIZE            169344  // our current fpga_[lh]f.bit files are 169297 bytes. Rounded up to next multiple of FPGA_INTERLEAVE_SIZE
+#define FPGA_INTERLEAVE_SIZE          2336  // (the FPGA's internal config frame size is 2336 bits. Interleaving with 2336 bytes should give best compression)
+#define FPGA_CONFIG_SIZE            170528  // our current fpga_[lh]f.bit files are 169297 bytes. Rounded up to next multiple of FPGA_INTERLEAVE_SIZE
 
 static void usage(void)
 {
