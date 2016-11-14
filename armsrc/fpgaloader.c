@@ -34,7 +34,7 @@ static uint32_t uncompressed_bytes_cnt;
 static const uint8_t _bitparse_fixed_header[] = {0x00, 0x09, 0x0f, 0xf0, 0x0f, 0xf0, 0x0f, 0xf0, 0x0f, 0xf0, 0x00, 0x00, 0x01};
 #define FPGA_BITSTREAM_FIXED_HEADER_SIZE	sizeof(_bitparse_fixed_header)
 #define OUTPUT_BUFFER_LEN 		80
-#define FPGA_INTERLEAVE_SIZE 	288
+#define FPGA_INTERLEAVE_SIZE   2336
 
 //-----------------------------------------------------------------------------
 // Set up the Serial Peripheral Interface as master

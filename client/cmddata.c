@@ -2060,7 +2060,7 @@ int CmdTuneSamples(const char *Cmd)
 		timeout++;
 		printf(".");
 		fflush(stdout);
-		if (timeout > 7) {
+		if (timeout > 15) {
 			PrintAndLog("\nNo response from Proxmark. Aborting...");
 			return 1;
 		}
