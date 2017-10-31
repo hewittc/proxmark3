@@ -10,20 +10,18 @@
 // executes.
 //-----------------------------------------------------------------------------
 
+#include <stdarg.h>
+
 #include "usb_cdc.h"
 #include "cmd.h"
-
 #include "proxmark3.h"
 #include "apps.h"
 #include "util.h"
 #include "printf.h"
 #include "string.h"
-
-#include <stdarg.h>
-
 #include "legicrf.h"
-#include <hitag2.h>
-#include <hitagS.h>
+#include "hitag2.h"
+#include "hitagS.h"
 #include "lfsampling.h"
 #include "BigBuf.h"
 #include "mifareutil.h"
@@ -452,7 +450,7 @@ void StandAloneMode14a()
 						SpinDelay(300);
 					}
 				}
-				if (!iso14443a_select_card(uid, &hi14a_card[selected], &cuid))
+				if (!iso14443a_select_card(uid, &hi14a_card[selected], &cuid, true, 0, true))
 					continue;
 				else
 				{
@@ -940,7 +938,7 @@ void UsbPacketReceived(uint8_t *packet, int len)
 			setSamplingConfig((sample_config *) c->d.asBytes);
 			break;
 		case CMD_ACQUIRE_RAW_ADC_SAMPLES_125K:
-			cmd_send(CMD_ACK,SampleLF(c->arg[0]),0,0,0,0);
+			cmd_send(CMD_ACK,SampleLF(c->arg[0], c->arg[1]),0,0,0,0);
 			break;
 		case CMD_MOD_THEN_ACQUIRE_RAW_ADC_SAMPLES_125K:
 			ModThenAcquireRawAdcSamples125k(c->arg[0],c->arg[1],c->arg[2],c->d.asBytes);
@@ -1017,16 +1015,19 @@ void UsbPacketReceived(uint8_t *packet, int len)
 			WritePCF7931(c->d.asBytes[0],c->d.asBytes[1],c->d.asBytes[2],c->d.asBytes[3],c->d.asBytes[4],c->d.asBytes[5],c->d.asBytes[6], c->d.asBytes[9], c->d.asBytes[7]-128,c->d.asBytes[8]-128, c->arg[0], c->arg[1], c->arg[2]);
 			break;
 		case CMD_EM4X_READ_WORD:
-			EM4xReadWord(c->arg[1], c->arg[2],c->d.asBytes[0]);
+			EM4xReadWord(c->arg[0], c->arg[1],c->arg[2]);
 			break;
 		case CMD_EM4X_WRITE_WORD:
-			EM4xWriteWord(c->arg[0], c->arg[1], c->arg[2], c->d.asBytes[0]);
+			EM4xWriteWord(c->arg[0], c->arg[1], c->arg[2]);
 			break;
 		case CMD_AWID_DEMOD_FSK: // Set realtime AWID demodulation
 			CmdAWIDdemodFSK(c->arg[0], 0, 0, 1);
 			break;
 		case CMD_VIKING_CLONE_TAG:
 			CopyVikingtoT55xx(c->arg[0], c->arg[1], c->arg[2]);
+			break;
+		case CMD_COTAG:
+			Cotag(c->arg[0]);
 			break;
 #endif
 
@@ -1050,7 +1051,12 @@ void UsbPacketReceived(uint8_t *packet, int len)
 			ReadHitagS((hitag_function)c->arg[0],(hitag_data*)c->d.asBytes);
 			break;
 		case CMD_WR_HITAG_S://writer for Hitag tags args=data to write,page and key or challenge
-			WritePageHitagS((hitag_function)c->arg[0],(hitag_data*)c->d.asBytes,c->arg[2]);
+			if ((hitag_function)c->arg[0] < 10) {
+				WritePageHitagS((hitag_function)c->arg[0],(hitag_data*)c->d.asBytes,c->arg[2]);
+			}
+			else if ((hitag_function)c->arg[0] >= 10) {
+			  WriterHitag((hitag_function)c->arg[0],(hitag_data*)c->d.asBytes, c->arg[2]);
+			}
 			break;
 #endif
 
@@ -1162,6 +1168,9 @@ void UsbPacketReceived(uint8_t *packet, int len)
 		case CMD_MIFAREU_WRITEBL:
 			MifareUWriteBlock(c->arg[0], c->arg[1], c->d.asBytes);
 			break;
+		case CMD_MIFARE_ACQUIRE_ENCRYPTED_NONCES:
+			MifareAcquireEncryptedNonces(c->arg[0], c->arg[1], c->arg[2], c->d.asBytes);
+			break;
 		case CMD_MIFARE_NESTED:
 			MifareNested(c->arg[0], c->arg[1], c->arg[2], c->d.asBytes);
 			break;
@@ -1190,6 +1199,9 @@ void UsbPacketReceived(uint8_t *packet, int len)
 			break;
 			
 		// Work with "magic Chinese" card
+		case CMD_MIFARE_CWIPE:
+			MifareCWipe(c->arg[0], c->arg[1], c->arg[2], c->d.asBytes);
+			break;
 		case CMD_MIFARE_CSETBLOCK:
 			MifareCSetBlock(c->arg[0], c->arg[1], c->arg[2], c->d.asBytes);
 			break;
@@ -1285,6 +1297,15 @@ void UsbPacketReceived(uint8_t *packet, int len)
 			break;
 
 		case CMD_DOWNLOADED_SIM_SAMPLES_125K: {
+			// iceman; since changing fpga_bitstreams clears bigbuff, Its better to call it before.
+			// to be able to use this one for uploading data to device 
+			// arg1 = 0 upload for LF usage 
+			//        1 upload for HF usage
+			if (c->arg[1] == 0)
+				FpgaDownloadAndGo(FPGA_BITSTREAM_LF);
+			else
+				FpgaDownloadAndGo(FPGA_BITSTREAM_HF);
+
 			uint8_t *b = BigBuf_get_addr();
 			memcpy(b+c->arg[0], c->d.asBytes, USB_CMD_DATA_SIZE);
 			cmd_send(CMD_ACK,0,0,0,0,0);
@@ -1295,7 +1316,7 @@ void UsbPacketReceived(uint8_t *packet, int len)
 			break;
 
 		case CMD_SET_LF_DIVISOR:
-		  	FpgaDownloadAndGo(FPGA_BITSTREAM_LF);
+			FpgaDownloadAndGo(FPGA_BITSTREAM_LF);
 			FpgaSendCommand(FPGA_CMD_SET_DIVISOR, c->arg[0]);
 			break;
 

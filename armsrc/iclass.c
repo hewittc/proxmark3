@@ -42,6 +42,7 @@
 #include "string.h"
 #include "common.h"
 #include "cmd.h"
+#include "iso14443a.h"
 // Needed for CRC in emulation mode;
 // same construction as in ISO 14443;
 // different initial value (CRC_ICLASS)
@@ -49,6 +50,7 @@
 #include "iso15693tools.h"
 #include "protocols.h"
 #include "optimized_cipher.h"
+#include "usb_cdc.h" // for usb_poll_validate_length
 
 static int timeout = 4096;
 
@@ -1473,7 +1475,7 @@ void CodeIClassCommand(const uint8_t * cmd, int len)
     for(j = 0; j < 4; j++) {
       for(k = 0; k < 4; k++) {
 			if(k == (b & 3)) {
-				ToSend[++ToSendMax] = 0x0f;
+				ToSend[++ToSendMax] = 0xf0;
 			}
 			else {
 				ToSend[++ToSendMax] = 0x00;
@@ -1580,8 +1582,8 @@ void setupIclassReader()
 {
     FpgaDownloadAndGo(FPGA_BITSTREAM_HF);
     // Reset trace buffer
-	set_tracing(TRUE);
-	clear_trace();
+	  set_tracing(TRUE);
+	  clear_trace();
 
     // Setup SSC
     FpgaSetupSsc();
@@ -1661,7 +1663,7 @@ uint8_t handshakeIclassTag_ext(uint8_t *card_data, bool use_credit_key)
 	//Flag that we got to at least stage 1, read CSN
 	read_status = 1;
 
-	// Card selected, now read e-purse (cc)
+	// Card selected, now read e-purse (cc) (only 8 bytes no CRC)
 	ReaderTransmitIClass(readcheck_cc, sizeof(readcheck_cc));
 	if(ReaderReceiveIClass(resp) == 8) {
 		//Save CC (e-purse) in response data
@@ -1671,7 +1673,7 @@ uint8_t handshakeIclassTag_ext(uint8_t *card_data, bool use_credit_key)
 
 	return read_status;
 }
-uint8_t handshakeIclassTag(uint8_t *card_data){
+uint8_t handshakeIclassTag(uint8_t *card_data) {
 	return handshakeIclassTag_ext(card_data, false);
 }
 
@@ -1681,28 +1683,37 @@ void ReaderIClass(uint8_t arg0) {
 
 	uint8_t card_data[6 * 8]={0};
 	memset(card_data, 0xFF, sizeof(card_data));
-	uint8_t last_csn[8]={0};
-	
+	uint8_t last_csn[8]={0,0,0,0,0,0,0,0};
+	uint8_t resp[ICLASS_BUFFER_SIZE];
+	memset(resp, 0xFF, sizeof(resp));
 	//Read conf block CRC(0x01) => 0xfa 0x22
 	uint8_t readConf[] = { ICLASS_CMD_READ_OR_IDENTIFY,0x01, 0xfa, 0x22};
-	//Read conf block CRC(0x05) => 0xde  0x64
+	//Read App Issuer Area block CRC(0x05) => 0xde  0x64
 	uint8_t readAA[] = { ICLASS_CMD_READ_OR_IDENTIFY,0x05, 0xde, 0x64};
-
 
 	int read_status= 0;
 	uint8_t result_status = 0;
+	// flag to read until one tag is found successfully
 	bool abort_after_read = arg0 & FLAG_ICLASS_READER_ONLY_ONCE;
+	// flag to only try 5 times to find one tag then return
 	bool try_once = arg0 & FLAG_ICLASS_READER_ONE_TRY;
-	bool use_credit_key = false;
-	if (arg0 & FLAG_ICLASS_READER_CEDITKEY)
-		use_credit_key = true;
-	set_tracing(TRUE);
+	// if neither abort_after_read nor try_once then continue reading until button pressed.
+
+	bool use_credit_key = arg0 & FLAG_ICLASS_READER_CEDITKEY;
+	// test flags for what blocks to be sure to read
+	uint8_t flagReadConfig = arg0 & FLAG_ICLASS_READER_CONF;
+	uint8_t flagReadCC = arg0 & FLAG_ICLASS_READER_CC;
+	uint8_t flagReadAA = arg0 & FLAG_ICLASS_READER_AA;
+
+	set_tracing(true);
 	setupIclassReader();
 
 	uint16_t tryCnt=0;
-	while(!BUTTON_PRESS())
+	bool userCancelled = BUTTON_PRESS() || usb_poll_validate_length();
+	while(!userCancelled)
 	{
-		if (try_once && tryCnt > 5) break; 
+		// if only looking for one card try 2 times if we missed it the first time
+		if (try_once && tryCnt > 2) break; 
 		tryCnt++;
 		if(!tracing) {
 			DbpString("Trace full");
@@ -1721,21 +1732,22 @@ void ReaderIClass(uint8_t arg0) {
 		// moving CC forward 8 bytes
 		memcpy(card_data+16,card_data+8, 8);
 		//Read block 1, config
-		if(arg0 & FLAG_ICLASS_READER_CONF)
-		{
-			if(sendCmdGetResponseWithRetries(readConf, sizeof(readConf),card_data+8, 10, 10))
+		if(flagReadConfig) {
+			if(sendCmdGetResponseWithRetries(readConf, sizeof(readConf), resp, 10, 10))
 			{
 				result_status |= FLAG_ICLASS_READER_CONF;
+				memcpy(card_data+8, resp, 8);
 			} else {
 				Dbprintf("Failed to dump config block");
 			}
 		}
 
 		//Read block 5, AA
-		if(arg0 & FLAG_ICLASS_READER_AA){
-			if(sendCmdGetResponseWithRetries(readAA, sizeof(readAA),card_data+(8*4), 10, 10))
+		if(flagReadAA) {
+			if(sendCmdGetResponseWithRetries(readAA, sizeof(readAA), resp, 10, 10))
 			{
 				result_status |= FLAG_ICLASS_READER_AA;
+				memcpy(card_data+(8*5), resp, 8);
 			} else {
 				//Dbprintf("Failed to dump AA block");
 			}
@@ -1747,19 +1759,20 @@ void ReaderIClass(uint8_t arg0) {
 		// (3,4 write-only, kc and kd)
 		// 5 Application issuer area
 		//
-		//Then we can 'ship' back the 8 * 5 bytes of data,
+		//Then we can 'ship' back the 8 * 6 bytes of data,
 		// with 0xFF:s in block 3 and 4.
 
 		LED_B_ON();
-		//Send back to client, but don't bother if we already sent this
+		//Send back to client, but don't bother if we already sent this - 
+		//  only useful if looping in arm (not try_once && not abort_after_read)
 		if(memcmp(last_csn, card_data, 8) != 0)
 		{
-			// If caller requires that we get CC, continue until we got it
-			if( (arg0 & read_status & FLAG_ICLASS_READER_CC) || !(arg0 & FLAG_ICLASS_READER_CC))
-			{
+			// If caller requires that we get Conf, CC, AA, continue until we got it
+			if( (result_status ^ FLAG_ICLASS_READER_CSN ^ flagReadConfig ^ flagReadCC ^ flagReadAA) == 0) {
 				cmd_send(CMD_ACK,result_status,0,0,card_data,sizeof(card_data));
 				if(abort_after_read) {
 					LED_A_OFF();
+					LED_B_OFF();
 					return;
 				}
 				//Save that we already sent this....
@@ -1768,8 +1781,13 @@ void ReaderIClass(uint8_t arg0) {
 
 		}
 		LED_B_OFF();
+		userCancelled = BUTTON_PRESS() || usb_poll_validate_length();
 	}
-	cmd_send(CMD_ACK,0,0,0,card_data, 0);
+	if (userCancelled) {
+		cmd_send(CMD_ACK,0xFF,0,0,card_data, 0);
+	} else {
+		cmd_send(CMD_ACK,0,0,0,card_data, 0);
+	}
 	LED_A_OFF();
 }
 
@@ -1983,18 +2001,26 @@ void iClass_Dump(uint8_t blockno, uint8_t numblks) {
 }
 
 bool iClass_WriteBlock_ext(uint8_t blockNo, uint8_t *data) {
-	uint8_t write[] = { ICLASS_CMD_UPDATE, blockNo, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+	uint8_t write[] = { ICLASS_CMD_UPDATE, blockNo, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 	//uint8_t readblockdata[10];
 	//write[1] = blockNo;
 	memcpy(write+2, data, 12); // data + mac
+	char *wrCmd = (char *)(write+1); 
+	uint16_t wrCrc = iclass_crc16(wrCmd, 13);
+	write[14] = wrCrc >> 8;
+	write[15] = wrCrc & 0xff;
 	uint8_t resp[] = {0,0,0,0,0,0,0,0,0,0};
-	bool isOK;
+	bool isOK = false;
+
 	isOK = sendCmdGetResponseWithRetries(write,sizeof(write),resp,sizeof(resp),10);
-	if (isOK) {
+	if (isOK) { //if reader responded correctly
 		//Dbprintf("WriteResp: %02X%02X%02X%02X%02X%02X%02X%02X%02X%02X",resp[0],resp[1],resp[2],resp[3],resp[4],resp[5],resp[6],resp[7],resp[8],resp[9]);
-		if (memcmp(write+2,resp,8)) {
-			//error try again
-			isOK = sendCmdGetResponseWithRetries(write,sizeof(write),resp,sizeof(resp),10);
+		if (memcmp(write+2,resp,8)) {  //if response is not equal to write values
+			if (blockNo != 3 && blockNo != 4) { //if not programming key areas (note key blocks don't get programmed with actual key data it is xor data)
+				//error try again
+				isOK = sendCmdGetResponseWithRetries(write,sizeof(write),resp,sizeof(resp),10);
+			} 
+			
 		}
 	}
 	return isOK;

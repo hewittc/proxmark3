@@ -8,11 +8,16 @@
 // High frequency commands
 //-----------------------------------------------------------------------------
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include "proxmark3.h"
-#include "graph.h"
+#include "util.h"
+#include "data.h"
 #include "ui.h"
+#include "iso14443crc.h"
+#include "parity.h"
+#include "cmdmain.h"
 #include "cmdparser.h"
 #include "cmdhf.h"
 #include "cmdhf14a.h"
@@ -477,14 +482,8 @@ uint16_t printTraceLine(uint16_t tracepos, uint16_t traceLen, uint8_t *trace, ui
 
 	for (int j = 0; j < data_len && j/16 < 16; j++) {
 
-		int oddparity = 0x01;
-		int k;
-
-		for (k=0 ; k<8 ; k++) {
-			oddparity ^= (((frame[j] & 0xFF) >> k) & 0x01);
-		}
 		uint8_t parityBits = parityBytes[j>>3];
-		if (protocol != ISO_14443B && (isResponse || protocol == ISO_14443A) && (oddparity != ((parityBits >> (7-(j&0x0007))) & 0x01))) {
+		if (protocol != ISO_14443B && (isResponse || protocol == ISO_14443A) && (oddparity8(frame[j]) != ((parityBits >> (7-(j&0x0007))) & 0x01))) {
 			snprintf(line[j/16]+(( j % 16) * 4),110, "%02x! ", frame[j]);
 		} else {
 			snprintf(line[j/16]+(( j % 16) * 4), 110, " %02x ", frame[j]);
@@ -547,7 +546,7 @@ uint16_t printTraceLine(uint16_t tracepos, uint16_t traceLen, uint8_t *trace, ui
 	
 	if (showWaitCycles && !isResponse && next_record_is_response(tracepos, trace)) {
 		uint32_t next_timestamp = *((uint32_t *)(trace + tracepos));
-		PrintAndLog(" %9d | %9d | %s | fdt (Frame Delay Time): %d",
+		PrintAndLog(" %10d | %10d | %s | fdt (Frame Delay Time): %d",
 			(EndOfTransmissionTimestamp - first_timestamp),
 			(next_timestamp - first_timestamp),
 			"   ",
@@ -674,14 +673,15 @@ int CmdHFSearch(const char *Cmd){
 		PrintAndLog("\nValid iClass Tag (or PicoPass Tag) Found - Quiting Search\n");
 		return ans;
 	}
-	ans = HF14BInfo(false);
-	if (ans) {
-		PrintAndLog("\nValid ISO14443B Tag Found - Quiting Search\n");
-		return ans;
-	}
 	ans = HF15Reader("", false);
 	if (ans) {
 		PrintAndLog("\nValid ISO15693 Tag Found - Quiting Search\n");
+		return ans;
+	}
+	//14b is longest test currently (and rarest chip type) ... put last
+	ans = HF14BInfo(false);
+	if (ans) {
+		PrintAndLog("\nValid ISO14443B Tag Found - Quiting Search\n");
 		return ans;
 	}
 	PrintAndLog("\nno known/supported 13.56 MHz tags found\n");

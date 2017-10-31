@@ -40,13 +40,14 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdio.h>
-#include <time.h>
+#include "util.h"
+#include "util_posix.h"
 #include "cipherutils.h"
 #include "cipher.h"
 #include "ikeys.h"
 #include "elite_crack.h"
 #include "fileutils.h"
-#include "des.h"
+#include "polarssl/des.h"
 
 /**
  * @brief Permutes a key from standard NIST format to Iclass specific format
@@ -512,7 +513,7 @@ int bruteforceDump(uint8_t dump[], size_t dumpsize, uint16_t keytable[])
 	uint8_t i;
 	int errors = 0;
 	size_t itemsize = sizeof(dumpdata);
-	clock_t t1 = clock();
+	uint64_t t1 = msclock();
 
 	dumpdata* attack = (dumpdata* ) malloc(itemsize);
 
@@ -522,9 +523,9 @@ int bruteforceDump(uint8_t dump[], size_t dumpsize, uint16_t keytable[])
 		errors += bruteforceItem(*attack, keytable);
 	}
 	free(attack);
-	t1 = clock() - t1;
-	float diff = ((float)t1 / CLOCKS_PER_SEC );
-	prnlog("\nPerformed full crack in %f seconds",diff);
+	t1 = msclock() - t1;
+	float diff = (float)t1 / 1000.0;
+	prnlog("\nPerformed full crack in %f seconds", diff);
 
 	// Pick out the first 16 bytes of the keytable.
 	// The keytable is now in 16-bit ints, where the upper 8 bits

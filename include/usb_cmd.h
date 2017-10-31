@@ -101,6 +101,7 @@ typedef struct{
 #define CMD_AWID_DEMOD_FSK                                                0x0221
 #define CMD_VIKING_CLONE_TAG                                              0x0223
 #define CMD_T55XX_WAKEUP                                                  0x0224
+#define CMD_COTAG                                                         0x0225
 
 
 /* CMD_SET_ADC_MUX: ext1 is 0 for lopkd, 1 for loraw, 2 for hipkd, 3 for hiraw */
@@ -174,11 +175,13 @@ typedef struct{
 #define CMD_MIFARE_CSETBLOCK                                              0x0605
 #define CMD_MIFARE_CGETBLOCK                                              0x0606
 #define CMD_MIFARE_CIDENT                                                 0x0607
+#define CMD_MIFARE_CWIPE                                                  0x0608
 
 #define CMD_SIMULATE_MIFARE_CARD                                          0x0610
 
 #define CMD_READER_MIFARE                                                 0x0611
 #define CMD_MIFARE_NESTED                                                 0x0612
+#define CMD_MIFARE_ACQUIRE_ENCRYPTED_NONCES                               0x0613
 
 #define CMD_MIFARE_READBL                                                 0x0620
 #define CMD_MIFAREU_READBL                                                0x0720
@@ -217,6 +220,7 @@ typedef struct{
 #define FLAG_7B_UID_IN_DATA   0x04
 #define FLAG_10B_UID_IN_DATA  0x08
 #define FLAG_NR_AR_ATTACK     0x10
+#define FLAG_RANDOM_NONCE     0x20
 
 
 //Iclass reader flags

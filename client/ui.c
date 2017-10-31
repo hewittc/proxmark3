@@ -12,16 +12,20 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <time.h>
+#include <stdbool.h>
 #include <readline/readline.h>
 #include <pthread.h>
 
 #include "ui.h"
 
-double CursorScaleFactor;
-int PlotGridX, PlotGridY, PlotGridXdefault= 64, PlotGridYdefault= 64;
+double CursorScaleFactor = 1;
+int PlotGridX=0, PlotGridY=0, PlotGridXdefault= 64, PlotGridYdefault= 64, CursorCPos= 0, CursorDPos= 0;
 int offline;
 int flushAfterWrite = 0;  //buzzy
+int GridOffset = 0;
+bool GridLocked = false;
+bool showDemod = true;
+
 extern pthread_mutex_t print_lock;
 
 static char *logfilename = "proxmark3.log";
@@ -34,7 +38,7 @@ void PrintAndLog(char *fmt, ...)
 	static FILE *logfile = NULL;
 	static int logging=1;
 
-	// lock this section to avoid interlacing prints from different threats
+	// lock this section to avoid interlacing prints from different threads
 	pthread_mutex_lock(&print_lock);
   
 	if (logging && !logfile) {
@@ -44,7 +48,9 @@ void PrintAndLog(char *fmt, ...)
 			logging=0;
 		}
 	}
-	
+
+#ifdef RL_STATE_READCMD
+	// We are using GNU readline.
 	int need_hack = (rl_readline_state & RL_STATE_READCMD) > 0;
 
 	if (need_hack) {
@@ -54,6 +60,10 @@ void PrintAndLog(char *fmt, ...)
 		rl_replace_line("", 0);
 		rl_redisplay();
 	}
+#else
+	// We are using libedit (OSX), which doesn't support this flag.
+	int need_hack = 0;
+#endif
 	
 	va_start(argptr, fmt);
 	va_copy(argptr2, argptr);

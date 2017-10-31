@@ -8,7 +8,6 @@
 // CRC Calculations from the software reveng commands
 //-----------------------------------------------------------------------------
 
-#include <stdlib.h>
 #ifdef _WIN32
 #  include <io.h>
 #  include <fcntl.h>
@@ -19,8 +18,8 @@
 
 #include <stdio.h>
 #include <string.h>
-//#include <stdlib.h>
-//#include <ctype.h>
+#include <stdlib.h>
+#include <ctype.h>
 #include "cmdmain.h"
 #include "cmdcrc.h"
 #include "reveng/reveng.h"
@@ -44,8 +43,9 @@ int split(char *str, char *arr[MAX_ARGS]){
 		while(isspace(str[beginIndex])){
 			++beginIndex;
 		}
-		if(str[beginIndex] == '\0')
+		if(str[beginIndex] == '\0') {
 			break;
+		}
 		endIndex = beginIndex;
 		while (str[endIndex] && !isspace(str[endIndex])){
 			++endIndex;

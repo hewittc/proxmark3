@@ -11,6 +11,9 @@
 #ifndef UI_H__
 #define UI_H__
 
+#include <stdbool.h>
+#include <stdint.h>
+
 void ShowGui(void);
 void HideGraphWindow(void);
 void ShowGraphWindow(void);
@@ -19,8 +22,10 @@ void PrintAndLog(char *fmt, ...);
 void SetLogFilename(char *fn);
 
 extern double CursorScaleFactor;
-extern int PlotGridX, PlotGridY, PlotGridXdefault, PlotGridYdefault;
+extern int PlotGridX, PlotGridY, PlotGridXdefault, PlotGridYdefault, CursorCPos, CursorDPos, GridOffset;
 extern int offline;
 extern int flushAfterWrite;   //buzzy
+extern bool GridLocked;
+extern bool showDemod;
 
 #endif

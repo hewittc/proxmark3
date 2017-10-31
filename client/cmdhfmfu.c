@@ -7,8 +7,16 @@
 //-----------------------------------------------------------------------------
 // High frequency MIFARE ULTRALIGHT (C) commands
 //-----------------------------------------------------------------------------
-#include "loclass/des.h"
+
 #include "cmdhfmfu.h"
+
+#include <stdint.h>
+#include <stdio.h>
+#include "proxmark3.h"
+#include "usb_cmd.h"
+#include "cmdmain.h"
+#include "ui.h"
+#include "polarssl/des.h"
 #include "cmdhfmf.h"
 #include "cmdhf14a.h"
 #include "mifare.h"
@@ -41,7 +49,7 @@ uint8_t default_3des_keys[KEYS_3DES_COUNT][16] = {
 		{ 0x00,0x11,0x22,0x33,0x44,0x55,0x66,0x77,0x88,0x99,0xAA,0xBB,0xCC,0xDD,0xEE,0xFF }	// 11 22 33
 };
 
-#define KEYS_PWD_COUNT 10
+#define KEYS_PWD_COUNT 6
 uint8_t default_pwd_pack[KEYS_PWD_COUNT][4] = {
 	{0xFF,0xFF,0xFF,0xFF}, // PACK 0x00,0x00 -- factory default
 
@@ -50,11 +58,6 @@ uint8_t default_pwd_pack[KEYS_PWD_COUNT][4] = {
 	{0xFF,0x90,0x6C,0xB2}, // PACK 0x12,0x9e -- italian bus (sniffed)	
 	{0x46,0x1c,0xA3,0x19}, // PACK 0xE9,0x5A -- italian bus (sniffed)
 	{0x35,0x1C,0xD0,0x19}, // PACK 0x9A,0x5a -- italian bus (sniffed)
-
-	{0x05,0x22,0xE6,0xB4}, // PACK 0x80,0x80 -- Amiiboo (sniffed) pikachu-b UID:
-	{0x7E,0x22,0xE6,0xB4}, // PACK 0x80,0x80 -- AMiiboo (sniffed) 
-	{0x02,0xE1,0xEE,0x36}, // PACK 0x80,0x80 -- AMiiboo (sniffed) sonic UID:  04d257 7ae33e8027
-	{0x32,0x0C,0x16,0x17}, // PACK 0x80,0x80 -- AMiiboo (sniffed) 
 };
 
 #define MAX_UL_TYPES 18
@@ -105,7 +108,7 @@ char *getUlev1CardSizeStr( uint8_t fsize ){
 }
 
 static void ul_switch_on_field(void) {
-	UsbCommand c = {CMD_READER_ISO_14443a, {ISO14A_CONNECT | ISO14A_NO_DISCONNECT, 0, 0}};
+	UsbCommand c = {CMD_READER_ISO_14443a, {ISO14A_CONNECT | ISO14A_NO_DISCONNECT | ISO14A_NO_RATS, 0, 0}};
 	clearCommandBuffer();
 	SendCommand(&c);
 }
@@ -1121,9 +1124,9 @@ int CmdHF14AMfURdBl(const char *Cmd){
 		uint8_t isOK = resp.arg[0] & 0xff;
 		if (isOK) {
 			uint8_t *data = resp.d.asBytes;
-			PrintAndLog("\nBlock#  | Data        | Ascii");
-			PrintAndLog("-----------------------------");
-			PrintAndLog("%02d/0x%02X | %s| %.4s\n", blockNo, blockNo, sprint_hex(data, 4), data);
+			PrintAndLog("\n Block#  | Data        | Ascii");
+			PrintAndLog("---------+-------------+------");
+			PrintAndLog(" %02d/0x%02X | %s| %.4s\n", blockNo, blockNo, sprint_hex(data, 4), data);
 		}
 		else {
 			PrintAndLog("Failed reading block: (%02x)", isOK);
@@ -1230,6 +1233,7 @@ int CmdHF14AMfUDump(const char *Cmd){
 	bool manualPages = false;
 	uint8_t startPage = 0;
 	char tempStr[50];
+	unsigned char cleanASCII[4];
 
 	while(param_getchar(Cmd, cmdp) != 0x00)
 	{
@@ -1368,11 +1372,11 @@ int CmdHF14AMfUDump(const char *Cmd){
 		}
 	}
 
-	PrintAndLog("\nBlock#  | Data        |lck| Ascii");
-	PrintAndLog("---------------------------------");
+	PrintAndLog("\n Block#  | Data        |lck| Ascii");
+	PrintAndLog("---------+-------------+---+------");
 	for (i = 0; i < Pages; ++i) {
 		if ( i < 3 ) {
-			PrintAndLog("%02d/0x%02X | %s|   | ", i+startPage, i+startPage, sprint_hex(data + i * 4, 4));
+			PrintAndLog("%3d/0x%02X | %s|   | ", i+startPage, i+startPage, sprint_hex(data + i * 4, 4));
 			continue;
 		}
 		switch(i){
@@ -1419,7 +1423,12 @@ int CmdHF14AMfUDump(const char *Cmd){
 			case 43: tmplockbit = bit2[9]; break;  //auth1
 			default: break;
 		}
-		PrintAndLog("%02d/0x%02X | %s| %d | %.4s", i+startPage, i+startPage, sprint_hex(data + i * 4, 4), tmplockbit, data+i*4);
+
+		// convert unprintable characters and line breaks to dots
+		memcpy(cleanASCII, data+i*4, 4);
+		clean_ascii(cleanASCII, 4);
+
+		PrintAndLog("%3d/0x%02X | %s| %d | %.4s", i+startPage, i+startPage, sprint_hex(data + i * 4, 4), tmplockbit, cleanASCII);
 	}
 	PrintAndLog("---------------------------------");
 
@@ -1460,7 +1469,7 @@ int CmdHF14AMfucAuth(const char *Cmd){
 	//Change key to user defined one
 	if (cmdp == 'k' || cmdp == 'K'){
 		keyNo = param_get8(Cmd, 1);
-		if(keyNo > KEYS_3DES_COUNT) 
+		if(keyNo > KEYS_3DES_COUNT-1) 
 			errors = true;
 	}
 

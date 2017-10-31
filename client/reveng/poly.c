@@ -139,7 +139,7 @@ filtop(FILE *input, unsigned long length, int flags, int bperhx) {
 	bmp_t accu = BMP_C(0);
 	bmp_t mask = bperhx == BMP_BIT ? ~BMP_C(0) : (BMP_C(1) << bperhx) - BMP_C(1);
 	unsigned long iter = 0UL, idx;
-	int cmask = ~(~0 << CHAR_BIT), c;
+	int cmask = ~(~0U << CHAR_BIT), c;
 	int count = 0, ofs;
 	poly_t poly = PZERO;
 	if(bperhx == 0) return(poly);
@@ -204,7 +204,7 @@ strtop(const char *string, int flags, int bperhx) {
 	bmp_t accu;
 	bmp_t mask = bperhx == BMP_BIT ? ~BMP_C(0) : (BMP_C(1) << bperhx) - BMP_C(1);
 	int pass, count, ofs;
-	int cmask = ~(~0 << CHAR_BIT), c;
+	int cmask = ~(~0U << CHAR_BIT), c;
 	const char *s;
 
 	poly_t poly = PZERO;
@@ -786,12 +786,13 @@ prev(poly_t *poly) {
 	unsigned long fulllength = poly->length + ofs;
 	bmp_t accu;
 
-	if(ofs)
+	if(ofs) {
 		/* removable optimisation */
 		if(poly->length < (unsigned long) BMP_BIT) {
 			*poly->bitmap = rev(*poly->bitmap >> ofs, (int) poly->length) << ofs;
 			return;
 		}
+	}
 
 	/* claim remaining bits of last word (as we use public function pshift()) */
 	poly->length = fulllength;

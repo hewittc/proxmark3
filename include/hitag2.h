@@ -13,15 +13,23 @@
 #ifndef _HITAG2_H_
 #define _HITAG2_H_
 
+#ifdef _MSC_VER
+#define PACKED
+#else
+#define PACKED __attribute__((packed))
+#endif
+
 typedef enum {
-	RHTSF_CHALLENGE		  = 01,
-	RHTSF_KEY		  = 02,
+	RHTSF_CHALLENGE           = 01,
+	RHTSF_KEY                 = 02,
 	WHTSF_CHALLENGE           = 03,
 	WHTSF_KEY                 = 04,
 	RHT2F_PASSWORD            = 21,
 	RHT2F_AUTHENTICATE        = 22,
 	RHT2F_CRYPTO              = 23,
+	WHT2F_CRYPTO              = 24,
 	RHT2F_TEST_AUTH_ATTEMPTS  = 25,
+	RHT2F_UID_ONLY            = 26,
 } hitag_function;
 
 typedef struct {
