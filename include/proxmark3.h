@@ -63,9 +63,6 @@
 #define SPI_MSD_MODE	2
 #define SPI_SPARE_MODE	3
 
-#define TRUE 1
-#define FALSE 0
-
 //#define PACKED __attribute__((__packed__))
 
 #define LCD_CS_ON()		HIGH(GPIO_LCD_CS)
